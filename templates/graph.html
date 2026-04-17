@@ -1,0 +1,2407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UPA — Live Dependency Graph</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: 'Segoe UI', -apple-system, sans-serif;
+    background: #0d1117;
+    color: #c9d1d9;
+    overflow: hidden;
+    height: 100vh;
+}
+
+#app {
+    display: flex;
+    height: 100vh;
+}
+
+/* Left sidebar */
+#sidebar {
+    width: 320px;
+    min-width: 320px;
+    background: #161b22;
+    border-right: 1px solid #30363d;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+#sidebar-header {
+    padding: 16px;
+    border-bottom: 1px solid #30363d;
+}
+
+#sidebar-header h1 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #f0f6fc;
+    margin-bottom: 8px;
+}
+
+#stats-bar {
+    display: flex;
+    gap: 12px;
+    font-size: 12px;
+    color: #8b949e;
+}
+
+#stats-bar span {
+    color: #58a6ff;
+    font-weight: 600;
+}
+
+/* Role selector */
+#role-bar {
+    padding: 8px 16px;
+    border-bottom: 1px solid #30363d;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+}
+
+#role-bar label { color: #8b949e; }
+
+#role-select {
+    flex: 1;
+    padding: 4px 8px;
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 4px;
+    color: #c9d1d9;
+    font-size: 12px;
+}
+
+/* Tab bar */
+#tab-bar {
+    display: flex;
+    border-bottom: 1px solid #30363d;
+}
+
+.tab-btn {
+    flex: 1;
+    padding: 8px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: #8b949e;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.tab-btn.active {
+    color: #58a6ff;
+    border-bottom-color: #58a6ff;
+}
+
+.tab-btn:hover { color: #c9d1d9; }
+
+/* Search */
+#search-box {
+    padding: 12px 16px;
+    border-bottom: 1px solid #30363d;
+}
+
+#search-input {
+    width: 100%;
+    padding: 8px 12px;
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    color: #c9d1d9;
+    font-size: 13px;
+    outline: none;
+}
+
+#search-input:focus {
+    border-color: #58a6ff;
+}
+
+#search-input::placeholder {
+    color: #484f58;
+}
+
+/* Module filter */
+#module-filters {
+    padding: 12px 16px;
+    border-bottom: 1px solid #30363d;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.module-btn {
+    padding: 4px 10px;
+    border-radius: 12px;
+    border: 1px solid #30363d;
+    background: transparent;
+    color: #8b949e;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.module-btn.active {
+    border-color: var(--mod-color);
+    color: var(--mod-color);
+    background: color-mix(in srgb, var(--mod-color) 15%, transparent);
+}
+
+.module-btn:hover {
+    border-color: #58a6ff;
+}
+
+/* Tab panels */
+.tab-panel { display: none; flex: 1; overflow-y: auto; }
+.tab-panel.active { display: block; }
+
+/* File list */
+#file-list {
+    padding: 8px 0;
+}
+
+.file-item {
+    padding: 6px 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    transition: background 0.1s;
+}
+
+.file-item:hover {
+    background: #1c2128;
+}
+
+.file-item.selected {
+    background: #1f2937;
+    border-left: 2px solid #58a6ff;
+}
+
+.file-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.file-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.file-lines {
+    color: #484f58;
+    font-size: 11px;
+}
+
+/* Changes tab */
+#changes-list { padding: 8px 0; }
+
+.change-item {
+    padding: 8px 16px;
+    border-bottom: 1px solid #21262d;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.change-item:hover { background: #1c2128; }
+
+.change-author {
+    color: #58a6ff;
+    font-weight: 600;
+}
+
+.change-date {
+    color: #484f58;
+    font-size: 11px;
+    margin-left: 8px;
+}
+
+.change-file {
+    color: #c9d1d9;
+    margin-top: 2px;
+    font-family: monospace;
+    font-size: 11px;
+}
+
+.change-msg {
+    color: #8b949e;
+    margin-top: 2px;
+}
+
+/* Impact tab */
+#impact-panel { padding: 16px; }
+
+.impact-source {
+    color: #ffa657;
+    font-weight: 600;
+    font-size: 13px;
+    margin-bottom: 8px;
+}
+
+.impact-count {
+    color: #8b949e;
+    font-size: 12px;
+    margin-bottom: 12px;
+}
+
+.impact-level {
+    margin-bottom: 8px;
+}
+
+.impact-level-header {
+    color: #58a6ff;
+    font-size: 11px;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.impact-file {
+    padding: 2px 0 2px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    color: #c9d1d9;
+}
+
+.impact-file:hover { color: #58a6ff; }
+
+/* Graph canvas */
+#graph-container {
+    flex: 1;
+    position: relative;
+}
+
+#graph-svg {
+    width: 100%;
+    height: 100%;
+}
+
+/* Tooltip */
+#tooltip {
+    position: absolute;
+    display: none;
+    background: #1c2128;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 14px;
+    font-size: 12px;
+    max-width: 360px;
+    pointer-events: none;
+    z-index: 100;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+
+#tooltip h3 {
+    font-size: 14px;
+    color: #f0f6fc;
+    margin-bottom: 8px;
+}
+
+#tooltip .meta {
+    color: #8b949e;
+    margin-bottom: 6px;
+}
+
+#tooltip .section-title {
+    color: #58a6ff;
+    font-weight: 600;
+    margin-top: 8px;
+    margin-bottom: 4px;
+}
+
+#tooltip .item-list {
+    color: #c9d1d9;
+    padding-left: 12px;
+}
+
+#tooltip .item-list li {
+    margin-bottom: 2px;
+}
+
+/* Detail panel (right sidebar) */
+#detail-panel {
+    width: 0;
+    background: #161b22;
+    border-left: 1px solid #30363d;
+    overflow-y: auto;
+    transition: width 0.2s;
+}
+
+#detail-panel.open {
+    width: 380px;
+    min-width: 380px;
+}
+
+#detail-content {
+    padding: 16px;
+}
+
+#detail-close {
+    float: right;
+    background: none;
+    border: none;
+    color: #8b949e;
+    cursor: pointer;
+    font-size: 18px;
+    padding: 4px;
+}
+
+#detail-close:hover { color: #f0f6fc; }
+
+#detail-content h2 {
+    font-size: 16px;
+    color: #f0f6fc;
+    margin-bottom: 12px;
+    padding-right: 24px;
+}
+
+.detail-meta {
+    font-size: 12px;
+    color: #8b949e;
+    margin-bottom: 4px;
+}
+
+.detail-meta span { color: #c9d1d9; }
+
+.detail-section {
+    margin-top: 16px;
+    border-top: 1px solid #30363d;
+    padding-top: 12px;
+}
+
+.detail-section h3 {
+    font-size: 13px;
+    color: #58a6ff;
+    margin-bottom: 8px;
+}
+
+.detail-section ul {
+    list-style: none;
+    padding: 0;
+}
+
+.detail-section li {
+    font-size: 12px;
+    padding: 3px 0;
+    color: #c9d1d9;
+}
+
+.detail-section li.async-fn::before {
+    content: "async ";
+    color: #d2a8ff;
+}
+
+.detail-section li.class-item {
+    color: #ffa657;
+    font-weight: 600;
+}
+
+.detail-section li.method-item {
+    padding-left: 16px;
+    color: #c9d1d9;
+    font-weight: normal;
+}
+
+.dep-link {
+    color: #58a6ff;
+    cursor: pointer;
+    text-decoration: none;
+}
+
+.dep-link:hover {
+    text-decoration: underline;
+}
+
+.git-commit {
+    padding: 6px 0;
+    border-bottom: 1px solid #21262d;
+}
+
+.git-commit:last-child { border-bottom: none; }
+
+.git-commit .commit-author { color: #58a6ff; font-weight: 600; }
+.git-commit .commit-date { color: #484f58; font-size: 11px; }
+.git-commit .commit-msg { color: #c9d1d9; margin-top: 2px; }
+.git-commit .commit-sha { color: #484f58; font-family: monospace; font-size: 11px; }
+
+.impact-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.impact-badge.high { background: #da3633; color: #fff; }
+.impact-badge.medium { background: #d29922; color: #fff; }
+.impact-badge.low { background: #238636; color: #fff; }
+
+/* Code viewer */
+.code-viewer-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 12px;
+    padding: 6px 14px;
+    background: #21262d;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    color: #58a6ff;
+    font-size: 12px;
+    cursor: pointer;
+    width: 100%;
+    justify-content: center;
+}
+.code-viewer-btn:hover { background: #30363d; }
+.code-viewer-btn.active { background: #1f6feb; border-color: #1f6feb; color: #fff; }
+
+#code-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 0;
+    height: 100vh;
+    background: #0d1117;
+    border-left: 2px solid #30363d;
+    z-index: 200;
+    transition: width 0.25s ease;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+#code-panel.open {
+    width: 55vw;
+}
+#code-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    background: #161b22;
+    border-bottom: 1px solid #30363d;
+    min-height: 42px;
+}
+#code-panel-header .file-path {
+    color: #58a6ff;
+    font-size: 13px;
+    font-family: monospace;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+#code-panel-header .file-meta {
+    color: #8b949e;
+    font-size: 11px;
+    margin-left: 12px;
+    white-space: nowrap;
+}
+#code-panel-close {
+    background: none;
+    border: none;
+    color: #8b949e;
+    font-size: 20px;
+    cursor: pointer;
+    padding: 2px 8px;
+}
+#code-panel-close:hover { color: #f0f6fc; }
+
+#code-panel-tabs {
+    display: flex;
+    background: #161b22;
+    border-bottom: 1px solid #30363d;
+    padding: 0 12px;
+}
+.code-tab {
+    padding: 6px 14px;
+    font-size: 12px;
+    color: #8b949e;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+}
+.code-tab:hover { color: #c9d1d9; }
+.code-tab.active { color: #f0f6fc; border-bottom-color: #58a6ff; }
+
+#code-content {
+    flex: 1;
+    overflow: auto;
+    padding: 0;
+}
+#code-content pre {
+    margin: 0;
+    padding: 12px 16px;
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 13px;
+    line-height: 1.55;
+    color: #c9d1d9;
+    white-space: pre;
+    tab-size: 4;
+    counter-reset: line;
+}
+#code-content .line-num {
+    display: inline-block;
+    width: 45px;
+    text-align: right;
+    padding-right: 16px;
+    color: #484f58;
+    user-select: none;
+    font-size: 12px;
+}
+/* Syntax highlighting */
+.hl-keyword { color: #ff7b72; }
+.hl-builtin { color: #79c0ff; }
+.hl-string { color: #a5d6ff; }
+.hl-comment { color: #8b949e; font-style: italic; }
+.hl-decorator { color: #d2a8ff; }
+.hl-number { color: #79c0ff; }
+.hl-class { color: #ffa657; }
+.hl-func { color: #d2a8ff; }
+.hl-self { color: #ff7b72; font-style: italic; }
+.hl-type { color: #ffa657; }
+.hl-op { color: #ff7b72; }
+
+/* Summary tab */
+.summary-view {
+    padding: 16px;
+}
+.summary-view h3 {
+    color: #58a6ff;
+    font-size: 14px;
+    margin: 16px 0 8px;
+}
+.summary-view h3:first-child { margin-top: 0; }
+.summary-card {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 8px;
+}
+.summary-card .sig {
+    font-family: monospace;
+    font-size: 12px;
+    color: #d2a8ff;
+}
+.summary-card .doc {
+    font-size: 11px;
+    color: #8b949e;
+    margin-top: 4px;
+}
+.summary-card .bases {
+    font-size: 11px;
+    color: #ffa657;
+    margin-top: 2px;
+}
+
+/* Controls */
+#controls {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    display: flex;
+    gap: 6px;
+    z-index: 10;
+}
+
+.ctrl-btn {
+    padding: 6px 12px;
+    background: #21262d;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    color: #c9d1d9;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.ctrl-btn:hover {
+    background: #30363d;
+}
+
+.ctrl-btn.active-btn {
+    background: #1f6feb;
+    border-color: #1f6feb;
+}
+
+.ctrl-select {
+    padding: 6px 10px;
+    background: #21262d;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    color: #c9d1d9;
+    font-size: 12px;
+    cursor: pointer;
+    outline: none;
+}
+.ctrl-select:hover { background: #30363d; }
+.ctrl-select option { background: #161b22; }
+
+.module-group-rect {
+    rx: 8;
+    ry: 8;
+    pointer-events: none;
+}
+.module-group-label {
+    pointer-events: none;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-anchor: middle;
+}
+
+/* Legend */
+#legend {
+    position: absolute;
+    bottom: 12px;
+    left: 12px;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 11px;
+    z-index: 10;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    max-width: 500px;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+}
+
+/* Generated timestamp */
+#gen-time {
+    position: absolute;
+    bottom: 12px;
+    right: 12px;
+    font-size: 11px;
+    color: #484f58;
+    z-index: 10;
+}
+
+/* Live indicator */
+#live-indicator {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    font-size: 11px;
+    color: #484f58;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.live-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #484f58;
+}
+
+.live-dot.active {
+    background: #3fb950;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #484f58; }
+
+/* Edge styles */
+.edge-line {
+    stroke: #21262d;
+    stroke-width: 0.8;
+    fill: none;
+    stroke-opacity: 0.4;
+}
+
+.edge-line.highlighted {
+    stroke: #58a6ff;
+    stroke-width: 2;
+    stroke-opacity: 0.9;
+}
+
+.edge-line.impact-hl {
+    stroke: #da3633;
+    stroke-width: 2;
+    stroke-opacity: 0.9;
+}
+
+.edge-line.dimmed {
+    stroke-opacity: 0.05;
+}
+
+/* Module cluster hulls */
+.module-hull {
+    pointer-events: none;
+}
+
+.module-label-text {
+    pointer-events: none;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, sans-serif;
+}
+
+.node-circle {
+    stroke: #30363d;
+    stroke-width: 1.5;
+    cursor: pointer;
+    transition: stroke-width 0.15s;
+}
+
+.node-circle:hover {
+    stroke-width: 3;
+    stroke: #f0f6fc;
+}
+
+.node-circle.dimmed {
+    opacity: 0.15;
+}
+
+.node-circle.highlighted {
+    stroke: #f0f6fc;
+    stroke-width: 3;
+}
+
+.node-circle.impact-source {
+    stroke: #ffa657;
+    stroke-width: 4;
+}
+
+.node-circle.impact-target {
+    stroke: #da3633;
+    stroke-width: 3;
+    stroke-dasharray: 3 2;
+}
+
+.node-label {
+    font-size: 10px;
+    fill: #8b949e;
+    pointer-events: none;
+    text-anchor: middle;
+}
+
+.node-label.dimmed {
+    opacity: 0.1;
+}
+
+.node-label.highlighted {
+    fill: #f0f6fc;
+    font-weight: 600;
+}
+
+/* Arrowhead */
+marker path {
+    fill: #30363d;
+}
+</style>
+</head>
+<body>
+<div id="app">
+    <!-- Left Sidebar -->
+    <div id="sidebar">
+        <div id="sidebar-header">
+            <h1>UPA Dependency Graph</h1>
+            <div id="stats-bar">
+                <div>Files: <span id="stat-files">0</span></div>
+                <div>Lines: <span id="stat-lines">0</span></div>
+                <div>Edges: <span id="stat-edges">0</span></div>
+            </div>
+        </div>
+        <div id="role-bar">
+            <label>View as:</label>
+            <select id="role-select" onchange="applyRole()">
+                <option value="admin">Admin (all)</option>
+            </select>
+        </div>
+        <div id="search-box">
+            <input type="text" id="search-input" placeholder="Search files, classes, functions...">
+        </div>
+        <div id="tab-bar">
+            <button class="tab-btn active" onclick="switchTab('files')">Files</button>
+            <button class="tab-btn" onclick="switchTab('changes')">Changes</button>
+            <button class="tab-btn" onclick="switchTab('impact')">Impact</button>
+        </div>
+        <div id="module-filters"></div>
+        <div id="tab-files" class="tab-panel active">
+            <div id="file-list"></div>
+        </div>
+        <div id="tab-changes" class="tab-panel">
+            <div id="changes-list"></div>
+        </div>
+        <div id="tab-impact" class="tab-panel">
+            <div id="impact-panel">
+                <p style="color:#8b949e;font-size:12px;padding:8px;">
+                    Click a file in the graph or file list to see its impact analysis — which files are affected if this file changes.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Graph Area -->
+    <div id="graph-container">
+        <div id="controls">
+            <select id="layout-select" class="ctrl-select" onchange="switchLayout(this.value)">
+                <option value="force" selected>Force Layout</option>
+                <option value="grid">Grid Layout</option>
+                <option value="hierarchy">Hierarchy</option>
+                <option value="radial">Radial</option>
+            </select>
+            <button class="ctrl-btn" onclick="resetZoom()">Reset View</button>
+            <button class="ctrl-btn" onclick="toggleLabels()">Labels</button>
+            <button class="ctrl-btn" onclick="togglePhysics()">Pause</button>
+            <button class="ctrl-btn" onclick="showImpactMode()">Impact Mode</button>
+            <button class="ctrl-btn" id="live-btn" onclick="toggleLive()">Live: Off</button>
+        </div>
+        <div id="live-indicator">
+            <div class="live-dot" id="live-dot"></div>
+            <span id="live-text">Auto-refresh off</span>
+        </div>
+        <svg id="graph-svg"></svg>
+        <div id="legend"></div>
+        <div id="gen-time"></div>
+        <div id="tooltip"></div>
+    </div>
+
+    <!-- Right Detail Panel -->
+    <div id="detail-panel">
+        <div id="detail-content"></div>
+    </div>
+</div>
+
+<!-- Code Viewer Panel (overlay) -->
+<div id="code-panel">
+    <div id="code-panel-header">
+        <div style="display:flex;align-items:center;overflow:hidden;">
+            <span class="file-path" id="code-file-path"></span>
+            <span class="file-meta" id="code-file-meta"></span>
+        </div>
+        <button id="code-panel-close" onclick="closeCodePanel()">&times;</button>
+    </div>
+    <div id="code-panel-tabs">
+        <button class="code-tab active" onclick="showCodeTab('source')">Source</button>
+        <button class="code-tab" onclick="showCodeTab('summary')">Summary</button>
+        <button class="code-tab" onclick="showCodeTab('deps')">Dependencies</button>
+    </div>
+    <div id="code-content"></div>
+</div>
+
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script>
+// Embedded graph data (injected by generate_graph.py — no fetch needed)
+const EMBEDDED_DATA = __GRAPH_DATA_PLACEHOLDER__;
+
+// State
+let graphData = null;
+let simulation = null;
+let showLabels = true;
+let physicsRunning = true;
+let activeModules = new Set();
+let selectedNode = null;
+let currentRole = "admin";
+let liveRefresh = false;
+let liveInterval = null;
+let impactMode = false;
+let lastDataHash = null;
+let currentLayout = 'force';
+
+// DOM refs
+const svg = d3.select("#graph-svg");
+const tooltip = document.getElementById("tooltip");
+const detailPanel = document.getElementById("detail-panel");
+const detailContent = document.getElementById("detail-content");
+
+// Load data — uses embedded data, no network request
+async function loadData() {
+    try {
+        graphData = EMBEDDED_DATA;
+        return true;
+    } catch (e) {
+        document.getElementById("graph-container").innerHTML =
+            '<div style="padding:40px;color:#f85149;font-size:14px;">' +
+            '<h2>No graph data found</h2>' +
+            '<p style="margin-top:12px;color:#8b949e;">Run this command first:</p>' +
+            '<pre style="margin-top:8px;padding:12px;background:#161b22;border-radius:6px;color:#c9d1d9;">' +
+            'python scripts/generate_graph.py</pre>' +
+            '<p style="margin-top:12px;color:#8b949e;">Then refresh this page.</p></div>';
+        return false;
+    }
+}
+
+async function initApp() {
+    const loaded = await loadData();
+    if (loaded) init();
+}
+
+function init() {
+    // Stats
+    document.getElementById("stat-files").textContent = graphData.stats.total_files;
+    document.getElementById("stat-lines").textContent = graphData.stats.total_lines.toLocaleString();
+    document.getElementById("stat-edges").textContent = graphData.stats.total_edges;
+    document.getElementById("gen-time").textContent = "Generated: " +
+        new Date(graphData.stats.generated_at).toLocaleString();
+
+    // All modules active
+    activeModules = new Set(Object.keys(graphData.stats.modules));
+
+    buildRoleSelector();
+    buildModuleFilters();
+    buildFileList();
+    buildChangesList();
+    buildGraph();
+}
+
+// Tab switching
+function switchTab(tab) {
+    document.querySelectorAll(".tab-btn").forEach((b, i) => {
+        b.classList.toggle("active", ["files", "changes", "impact"][i] === tab);
+    });
+    document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+    document.getElementById("tab-" + tab).classList.add("active");
+}
+
+// Role selector
+function buildRoleSelector() {
+    const select = document.getElementById("role-select");
+    select.innerHTML = "";
+    if (graphData.roles && graphData.roles.roles) {
+        for (const [key, role] of Object.entries(graphData.roles.roles)) {
+            const opt = document.createElement("option");
+            opt.value = key;
+            opt.textContent = role.label;
+            if (key === "admin") opt.selected = true;
+            select.appendChild(opt);
+        }
+    } else {
+        const opt = document.createElement("option");
+        opt.value = "admin";
+        opt.textContent = "Admin (all)";
+        select.appendChild(opt);
+    }
+}
+
+function applyRole() {
+    currentRole = document.getElementById("role-select").value;
+    const roles = graphData.roles?.roles || {};
+    const role = roles[currentRole];
+
+    if (role && !role.modules.includes("*")) {
+        activeModules = new Set(role.modules);
+    } else {
+        activeModules = new Set(Object.keys(graphData.stats.modules));
+    }
+
+    // Update module buttons
+    document.querySelectorAll(".module-btn[data-module]").forEach(btn => {
+        if (activeModules.has(btn.dataset.module)) {
+            btn.classList.add("active");
+        } else {
+            btn.classList.remove("active");
+        }
+    });
+
+    updateVisibility();
+    buildFileList();
+}
+
+// Module filter buttons
+function buildModuleFilters() {
+    const container = document.getElementById("module-filters");
+    container.innerHTML = "";
+
+    const allBtn = document.createElement("button");
+    allBtn.className = "module-btn active";
+    allBtn.textContent = "All";
+    allBtn.style.setProperty("--mod-color", "#58a6ff");
+    allBtn.onclick = () => {
+        activeModules = new Set(Object.keys(graphData.stats.modules));
+        document.querySelectorAll(".module-btn").forEach(b => b.classList.add("active"));
+        updateVisibility();
+        buildFileList();
+    };
+    container.appendChild(allBtn);
+
+    for (const mod of Object.keys(graphData.stats.modules).sort()) {
+        const color = graphData.colors[mod] || "#8b949e";
+        const btn = document.createElement("button");
+        btn.className = "module-btn active";
+        btn.textContent = `${mod} (${graphData.stats.modules[mod].files})`;
+        btn.style.setProperty("--mod-color", color);
+        btn.dataset.module = mod;
+        btn.onclick = () => {
+            if (activeModules.has(mod)) {
+                activeModules.delete(mod);
+                btn.classList.remove("active");
+            } else {
+                activeModules.add(mod);
+                btn.classList.add("active");
+            }
+            updateVisibility();
+            buildFileList();
+        };
+        container.appendChild(btn);
+    }
+}
+
+// File list
+function buildFileList() {
+    const container = document.getElementById("file-list");
+    const searchTerm = document.getElementById("search-input").value.toLowerCase();
+    container.innerHTML = "";
+
+    const filtered = graphData.nodes.filter(n => {
+        if (!activeModules.has(n.module)) return false;
+        if (searchTerm) {
+            const haystack = (n.path + " " +
+                (n.classes || []).map(c => c.name).join(" ") + " " +
+                (n.functions || []).map(f => f.name).join(" ")).toLowerCase();
+            return haystack.includes(searchTerm);
+        }
+        return true;
+    });
+
+    filtered.sort((a, b) => a.path.localeCompare(b.path));
+
+    for (const node of filtered) {
+        const div = document.createElement("div");
+        div.className = "file-item" + (selectedNode === node.id ? " selected" : "");
+        const color = graphData.colors[node.module] || "#8b949e";
+        div.innerHTML = `
+            <div class="file-dot" style="background:${color}"></div>
+            <div class="file-name" title="${node.path}">${node.path}</div>
+            <div class="file-lines">${node.lines}L</div>
+        `;
+        div.onclick = () => selectNode(node.id);
+        container.appendChild(div);
+    }
+}
+
+// Changes list — aggregated git history across all files
+function buildChangesList() {
+    const container = document.getElementById("changes-list");
+    container.innerHTML = "";
+
+    // Collect all commits from all files
+    const allCommits = [];
+    for (const node of graphData.nodes) {
+        if (!node.git_history) continue;
+        for (const commit of node.git_history) {
+            allCommits.push({ ...commit, file: node.path, module: node.module });
+        }
+    }
+
+    // Deduplicate by sha+file, sort by date
+    const seen = new Set();
+    const unique = [];
+    for (const c of allCommits) {
+        const key = c.sha + c.file;
+        if (!seen.has(key)) {
+            seen.add(key);
+            unique.push(c);
+        }
+    }
+    unique.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    // Group by sha (one commit may touch multiple files)
+    const grouped = {};
+    for (const c of unique) {
+        if (!grouped[c.sha]) {
+            grouped[c.sha] = { ...c, files: [] };
+        }
+        grouped[c.sha].files.push(c.file);
+    }
+
+    const commits = Object.values(grouped).slice(0, 50);
+
+    if (commits.length === 0) {
+        container.innerHTML = '<p style="color:#8b949e;font-size:12px;padding:16px;">No git history available. Make sure this is a git repository.</p>';
+        return;
+    }
+
+    for (const commit of commits) {
+        const div = document.createElement("div");
+        div.className = "change-item";
+        const dateStr = new Date(commit.date).toLocaleString();
+        div.innerHTML = `
+            <div>
+                <span class="change-author">${escapeHtml(commit.author)}</span>
+                <span class="change-date">${dateStr}</span>
+                <span class="commit-sha">${commit.sha}</span>
+            </div>
+            <div class="change-msg">${escapeHtml(commit.message)}</div>
+            <div class="change-file">${commit.files.map(f => escapeHtml(f)).join(", ")}</div>
+        `;
+        div.onclick = () => {
+            if (commit.files.length === 1) {
+                selectNode(commit.files[0]);
+            }
+        };
+        container.appendChild(div);
+    }
+}
+
+function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+// Impact analysis panel
+function showImpactForNode(nodeId) {
+    const panel = document.getElementById("impact-panel");
+    const impactData = graphData.impact || {};
+    const affected = impactData[nodeId] || [];
+    const node = graphData.nodes.find(n => n.id === nodeId);
+
+    if (!node) {
+        panel.innerHTML = '<p style="color:#8b949e;font-size:12px;">Select a file to see impact.</p>';
+        return;
+    }
+
+    let badgeClass = "low";
+    if (affected.length > 10) badgeClass = "high";
+    else if (affected.length > 3) badgeClass = "medium";
+
+    let html = `<div class="impact-source">${node.path}</div>`;
+    html += `<div class="impact-count">If this file changes, <span class="impact-badge ${badgeClass}">${affected.length} files</span> are affected</div>`;
+
+    if (affected.length > 0) {
+        // Group by module
+        const byModule = {};
+        for (const f of affected) {
+            const affNode = graphData.nodes.find(n => n.id === f);
+            const mod = affNode ? affNode.module : "unknown";
+            if (!byModule[mod]) byModule[mod] = [];
+            byModule[mod].push(f);
+        }
+
+        for (const [mod, files] of Object.entries(byModule).sort()) {
+            html += `<div class="impact-level">`;
+            html += `<div class="impact-level-header">${mod} (${files.length})</div>`;
+            for (const f of files.sort()) {
+                html += `<div class="impact-file" onclick="selectNode('${f}')">${f}</div>`;
+            }
+            html += `</div>`;
+        }
+    } else {
+        html += `<p style="color:#3fb950;font-size:12px;margin-top:12px;">This file has no downstream dependents. Changes here are isolated.</p>`;
+    }
+
+    panel.innerHTML = html;
+    switchTab("impact");
+}
+
+// Impact mode — highlight all affected files on the graph
+function showImpactMode() {
+    impactMode = !impactMode;
+    const btn = document.querySelector('.ctrl-btn:nth-child(4)');
+    btn.classList.toggle("active-btn", impactMode);
+
+    if (impactMode && selectedNode) {
+        highlightImpact(selectedNode);
+    } else {
+        clearImpactHighlight();
+    }
+}
+
+function highlightImpact(nodeId) {
+    const affected = new Set(graphData.impact?.[nodeId] || []);
+
+    window._nodes
+        .classed("dimmed", n => n.id !== nodeId && !affected.has(n.id))
+        .classed("impact-source", n => n.id === nodeId)
+        .classed("impact-target", n => affected.has(n.id));
+
+    window._labels
+        .classed("dimmed", n => n.id !== nodeId && !affected.has(n.id))
+        .classed("highlighted", n => n.id === nodeId || affected.has(n.id));
+
+    // Highlight edges in the impact chain
+    window._links
+        .classed("dimmed", l => {
+            const src = l.source.id || l.source;
+            const tgt = l.target.id || l.target;
+            return !(src === nodeId || affected.has(src)) || !(tgt === nodeId || affected.has(tgt));
+        })
+        .classed("impact-hl", l => {
+            const src = l.source.id || l.source;
+            const tgt = l.target.id || l.target;
+            return (src === nodeId || affected.has(src)) && (tgt === nodeId || affected.has(tgt));
+        });
+}
+
+function clearImpactHighlight() {
+    if (!window._nodes) return;
+    window._nodes
+        .classed("dimmed", false)
+        .classed("impact-source", false)
+        .classed("impact-target", false);
+    window._labels
+        .classed("dimmed", false)
+        .classed("highlighted", false);
+    window._links
+        .classed("dimmed", false)
+        .classed("impact-hl", false)
+        .classed("highlighted", false);
+}
+
+// Live refresh — data is embedded, so re-run generate_graph.py and reload
+function toggleLive() {
+    const btn = document.getElementById("live-btn");
+    const dot = document.getElementById("live-dot");
+    const text = document.getElementById("live-text");
+    text.textContent = "Re-run: python scripts/generate_graph.py then reload";
+    dot.classList.add("active");
+    setTimeout(() => dot.classList.remove("active"), 3000);
+}
+
+// D3 Graph
+function buildGraph() {
+    const container = document.getElementById("graph-container");
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+
+    svg.selectAll("*").remove();
+
+    // Arrow markers
+    const defs = svg.append("defs");
+
+    defs.append("marker")
+        .attr("id", "arrowhead")
+        .attr("viewBox", "0 -5 10 10")
+        .attr("refX", 20).attr("refY", 0)
+        .attr("markerWidth", 6).attr("markerHeight", 6)
+        .attr("orient", "auto")
+        .append("path").attr("d", "M0,-4L8,0L0,4").attr("fill", "#30363d");
+
+    defs.append("marker")
+        .attr("id", "arrowhead-hl")
+        .attr("viewBox", "0 -5 10 10")
+        .attr("refX", 20).attr("refY", 0)
+        .attr("markerWidth", 6).attr("markerHeight", 6)
+        .attr("orient", "auto")
+        .append("path").attr("d", "M0,-4L8,0L0,4").attr("fill", "#58a6ff");
+
+    defs.append("marker")
+        .attr("id", "arrowhead-impact")
+        .attr("viewBox", "0 -5 10 10")
+        .attr("refX", 20).attr("refY", 0)
+        .attr("markerWidth", 6).attr("markerHeight", 6)
+        .attr("orient", "auto")
+        .append("path").attr("d", "M0,-4L8,0L0,4").attr("fill", "#da3633");
+
+    const g = svg.append("g");
+
+    // Zoom
+    const zoom = d3.zoom()
+        .scaleExtent([0.1, 5])
+        .on("zoom", (event) => g.attr("transform", event.transform));
+    svg.call(zoom);
+    window._zoom = zoom;
+    window._svg = svg;
+    window._g = g;
+
+    // --- Module Clustering Layout ---
+    // Position modules in a radial arrangement to prevent overlap
+    const modules = [...new Set(graphData.nodes.map(n => n.module))].sort();
+    const moduleCount = modules.length;
+    const centerX = width / 2;
+    const centerY = height / 2;
+    const clusterRadius = Math.min(width, height) * 0.32;
+
+    const modulePositions = {};
+    modules.forEach((mod, i) => {
+        const angle = (2 * Math.PI * i) / moduleCount - Math.PI / 2;
+        modulePositions[mod] = {
+            x: centerX + clusterRadius * Math.cos(angle),
+            y: centerY + clusterRadius * Math.sin(angle),
+        };
+    });
+
+    // Set initial positions near module cluster centers
+    graphData.nodes.forEach(d => {
+        const mp = modulePositions[d.module] || { x: centerX, y: centerY };
+        d.x = mp.x + (Math.random() - 0.5) * 80;
+        d.y = mp.y + (Math.random() - 0.5) * 80;
+    });
+
+    // Module hull backgrounds
+    const hullGroup = g.append("g").attr("class", "hulls");
+    const hullPadding = 30;
+
+    function computeHulls() {
+        const hullData = [];
+        for (const mod of modules) {
+            const points = graphData.nodes
+                .filter(n => n.module === mod && activeModules.has(n.module))
+                .map(n => [n.x, n.y]);
+            if (points.length >= 3) {
+                const hull = d3.polygonHull(points);
+                if (hull) hullData.push({ module: mod, hull });
+            } else if (points.length > 0) {
+                // For 1-2 nodes, create a simple rectangle
+                const cx = d3.mean(points, p => p[0]);
+                const cy = d3.mean(points, p => p[1]);
+                hullData.push({
+                    module: mod,
+                    hull: [
+                        [cx - hullPadding, cy - hullPadding],
+                        [cx + hullPadding, cy - hullPadding],
+                        [cx + hullPadding, cy + hullPadding],
+                        [cx - hullPadding, cy + hullPadding],
+                    ]
+                });
+            }
+        }
+        return hullData;
+    }
+
+    function expandHull(hull, padding) {
+        const cx = d3.mean(hull, p => p[0]);
+        const cy = d3.mean(hull, p => p[1]);
+        return hull.map(([x, y]) => {
+            const dx = x - cx;
+            const dy = y - cy;
+            const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+            return [x + (dx / dist) * padding, y + (dy / dist) * padding];
+        });
+    }
+
+    // Links (curved paths)
+    const linkGroup = g.append("g").attr("class", "links");
+    const links = linkGroup.selectAll("path")
+        .data(graphData.edges)
+        .enter()
+        .append("path")
+        .attr("class", "edge-line")
+        .attr("marker-end", "url(#arrowhead)");
+
+    // Module labels (positioned at cluster centers)
+    const modLabelGroup = g.append("g").attr("class", "module-labels");
+    const modLabels = modLabelGroup.selectAll("text")
+        .data(modules.filter(m => activeModules.has(m)))
+        .enter()
+        .append("text")
+        .attr("class", "module-label-text")
+        .text(d => d.toUpperCase())
+        .attr("text-anchor", "middle")
+        .attr("fill", d => graphData.colors[d] || "#8b949e")
+        .attr("font-size", "11px")
+        .attr("font-weight", "700")
+        .attr("letter-spacing", "1.5px")
+        .attr("opacity", 0.45);
+
+    // Nodes
+    const nodeGroup = g.append("g").attr("class", "nodes");
+    const nodeSize = d => Math.max(5, Math.min(16, Math.sqrt(d.lines) * 1.1));
+
+    const nodes = nodeGroup.selectAll("circle")
+        .data(graphData.nodes)
+        .enter()
+        .append("circle")
+        .attr("class", "node-circle")
+        .attr("r", d => nodeSize(d))
+        .attr("fill", d => graphData.colors[d.module] || "#8b949e")
+        .attr("data-id", d => d.id)
+        .on("mouseover", onNodeHover)
+        .on("mouseout", onNodeOut)
+        .on("click", (event, d) => { event.stopPropagation(); selectNode(d.id); })
+        .call(d3.drag()
+            .on("start", dragStart)
+            .on("drag", dragging)
+            .on("end", dragEnd));
+
+    // Labels
+    const labelGroup = g.append("g").attr("class", "labels");
+    const labels = labelGroup.selectAll("text")
+        .data(graphData.nodes)
+        .enter()
+        .append("text")
+        .attr("class", "node-label")
+        .text(d => d.label)
+        .attr("dy", d => nodeSize(d) + 12);
+
+    // Custom clustering force: attract nodes toward their module center
+    function clusterForce(alpha) {
+        for (const d of graphData.nodes) {
+            const mp = modulePositions[d.module];
+            if (mp) {
+                d.vx += (mp.x - d.x) * alpha * 0.12;
+                d.vy += (mp.y - d.y) * alpha * 0.12;
+            }
+        }
+    }
+
+    // Simulation with module-aware forces
+    simulation = d3.forceSimulation(graphData.nodes)
+        .force("link", d3.forceLink(graphData.edges)
+            .id(d => d.id)
+            .distance(d => {
+                // Shorter links within module, longer between modules
+                const srcMod = typeof d.source === "string"
+                    ? graphData.nodes.find(n => n.id === d.source)?.module
+                    : d.source.module;
+                const tgtMod = typeof d.target === "string"
+                    ? graphData.nodes.find(n => n.id === d.target)?.module
+                    : d.target.module;
+                return srcMod === tgtMod ? 50 : 150;
+            })
+            .strength(d => {
+                const srcMod = typeof d.source === "string"
+                    ? graphData.nodes.find(n => n.id === d.source)?.module
+                    : d.source.module;
+                const tgtMod = typeof d.target === "string"
+                    ? graphData.nodes.find(n => n.id === d.target)?.module
+                    : d.target.module;
+                return srcMod === tgtMod ? 0.6 : 0.08;
+            }))
+        .force("charge", d3.forceManyBody()
+            .strength(-350)
+            .distanceMax(500))
+        .force("center", d3.forceCenter(centerX, centerY).strength(0.03))
+        .force("collision", d3.forceCollide()
+            .radius(d => nodeSize(d) + 16)
+            .strength(1.0)
+            .iterations(3))
+        .force("cluster", clusterForce)
+        .on("tick", () => {
+            links.attr("d", d => edgePath(d));
+            nodes
+                .attr("cx", d => d.x)
+                .attr("cy", d => d.y);
+            labels
+                .attr("x", d => d.x)
+                .attr("y", d => d.y);
+
+            // Update module cluster hulls
+            const hullData = computeHulls();
+            const hulls = hullGroup.selectAll("path").data(hullData, d => d.module);
+            hulls.enter()
+                .append("path")
+                .attr("class", "module-hull")
+                .attr("fill", d => graphData.colors[d.module] || "#8b949e")
+                .attr("fill-opacity", 0.04)
+                .attr("stroke", d => graphData.colors[d.module] || "#8b949e")
+                .attr("stroke-opacity", 0.15)
+                .attr("stroke-width", 1.5)
+                .attr("stroke-dasharray", "4,3")
+                .merge(hulls)
+                .attr("d", d => {
+                    const expanded = expandHull(d.hull, hullPadding);
+                    return "M" + expanded.map(p => p.join(",")).join("L") + "Z";
+                });
+            hulls.exit().remove();
+
+            // Update module labels at cluster centers
+            modLabels.attr("x", d => {
+                const pts = graphData.nodes.filter(n => n.module === d);
+                return pts.length ? d3.mean(pts, n => n.x) : 0;
+            }).attr("y", d => {
+                const pts = graphData.nodes.filter(n => n.module === d);
+                return pts.length ? d3.min(pts, n => n.y) - 28 : 0;
+            });
+        });
+
+    // Warm start: run 150 ticks to fully settle layout before rendering
+    simulation.alpha(1);
+    for (let i = 0; i < 150; i++) simulation.tick();
+    simulation.alpha(0.15).restart();
+
+    // Store refs
+    window._links = links;
+    window._nodes = nodes;
+    window._labels = labels;
+
+    buildLegend();
+
+    svg.on("click", () => { clearSelection(); });
+
+    // Auto-fit to content after settling
+    setTimeout(() => {
+        const bounds = g.node().getBBox();
+        if (bounds.width > 0 && bounds.height > 0) {
+            const pad = 60;
+            const scale = Math.min(
+                width / (bounds.width + pad * 2),
+                height / (bounds.height + pad * 2),
+                1.5
+            );
+            const tx = width / 2 - (bounds.x + bounds.width / 2) * scale;
+            const ty = height / 2 - (bounds.y + bounds.height / 2) * scale;
+            svg.transition().duration(600).call(
+                zoom.transform,
+                d3.zoomIdentity.translate(tx, ty).scale(scale)
+            );
+        }
+    }, 1500);
+}
+
+// --- Curved Edge Path Generator ---
+function edgePath(d) {
+    const sx = d.source.x, sy = d.source.y;
+    const tx = d.target.x, ty = d.target.y;
+    const dx = tx - sx, dy = ty - sy;
+    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+
+    // Subtle curve: less for same-module, more for cross-module
+    const sameModule = d.source.module === d.target.module;
+    const curveFactor = sameModule ? 0.08 : 0.18;
+
+    // Control point: perpendicular offset at midpoint
+    const mx = (sx + tx) / 2 + (ty - sy) * curveFactor;
+    const my = (sy + ty) / 2 - (tx - sx) * curveFactor;
+
+    return `M${sx},${sy} Q${mx},${my} ${tx},${ty}`;
+}
+
+// --- Layout Switching ---
+function switchLayout(mode) {
+    currentLayout = mode;
+    const container = document.getElementById("graph-container");
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+
+    // Clear fixed positions
+    graphData.nodes.forEach(n => { n.fx = null; n.fy = null; });
+
+    if (mode === "grid") {
+        applyGridLayout(width, height);
+        simulation.stop();
+        updatePositionsImmediate();
+        autoFitZoom();
+    } else if (mode === "hierarchy") {
+        applyHierarchyLayout(width, height);
+        simulation.stop();
+        updatePositionsImmediate();
+        autoFitZoom();
+    } else if (mode === "radial") {
+        applyRadialLayout(width, height);
+        simulation.stop();
+        updatePositionsImmediate();
+        autoFitZoom();
+    } else {
+        // Force layout — restart simulation with clustering
+        const centerX = width / 2;
+        const centerY = height / 2;
+        const modules = [...new Set(graphData.nodes.map(n => n.module))].sort();
+        const clusterRadius = Math.min(width, height) * 0.32;
+
+        const modulePositions = {};
+        modules.forEach((mod, i) => {
+            const angle = (2 * Math.PI * i) / modules.length - Math.PI / 2;
+            modulePositions[mod] = {
+                x: centerX + clusterRadius * Math.cos(angle),
+                y: centerY + clusterRadius * Math.sin(angle),
+            };
+        });
+
+        graphData.nodes.forEach(d => {
+            const mp = modulePositions[d.module] || { x: centerX, y: centerY };
+            d.x = mp.x + (Math.random() - 0.5) * 80;
+            d.y = mp.y + (Math.random() - 0.5) * 80;
+        });
+
+        simulation.alpha(1).restart();
+    }
+}
+
+// Grid: modules as boxes, files in rows within each box
+function applyGridLayout(width, height) {
+    const modules = [...new Set(graphData.nodes.map(n => n.module))].sort();
+    const cols = Math.ceil(Math.sqrt(modules.length));
+    const rows = Math.ceil(modules.length / cols);
+    const cellW = width / cols;
+    const cellH = height / rows;
+    const padding = 40;
+
+    modules.forEach((mod, i) => {
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        const cx = cellW * col + cellW / 2;
+        const cy = cellH * row + cellH / 2;
+
+        const modNodes = graphData.nodes.filter(n => n.module === mod);
+        const innerCols = Math.ceil(Math.sqrt(modNodes.length));
+        const innerRows = Math.ceil(modNodes.length / innerCols);
+        const spacingX = Math.min((cellW - padding * 2) / Math.max(innerCols, 1), 60);
+        const spacingY = Math.min((cellH - padding * 2) / Math.max(innerRows, 1), 50);
+
+        modNodes.forEach((n, j) => {
+            const ic = j % innerCols;
+            const ir = Math.floor(j / innerCols);
+            n.x = cx + (ic - (innerCols - 1) / 2) * spacingX;
+            n.y = cy + (ir - (innerRows - 1) / 2) * spacingY;
+            n.fx = n.x;
+            n.fy = n.y;
+        });
+    });
+}
+
+// Hierarchy: top-to-bottom DAG based on dependency depth
+function applyHierarchyLayout(width, height) {
+    // Compute levels via BFS from roots (nodes with no incoming edges)
+    const inDegree = {};
+    graphData.nodes.forEach(n => { inDegree[n.id] = 0; });
+    graphData.edges.forEach(e => {
+        const tgt = typeof e.target === "string" ? e.target : e.target.id;
+        inDegree[tgt] = (inDegree[tgt] || 0) + 1;
+    });
+
+    const levels = {};
+    const queue = [];
+    graphData.nodes.forEach(n => {
+        if (inDegree[n.id] === 0) {
+            levels[n.id] = 0;
+            queue.push(n.id);
+        }
+    });
+
+    // If no roots found (all circular), assign all to level 0
+    if (queue.length === 0) {
+        graphData.nodes.forEach(n => { levels[n.id] = 0; queue.push(n.id); });
+    }
+
+    // BFS with cycle protection: max iterations = nodes * edges
+    const maxIter = graphData.nodes.length * graphData.edges.length + 1000;
+    const maxDepth = graphData.nodes.length;
+    let iter = 0;
+    while (queue.length > 0 && iter < maxIter) {
+        iter++;
+        const curr = queue.shift();
+        const currLevel = levels[curr] || 0;
+        if (currLevel >= maxDepth) continue; // Prevent runaway depth
+        graphData.edges.forEach(e => {
+            const src = typeof e.source === "string" ? e.source : e.source.id;
+            const tgt = typeof e.target === "string" ? e.target : e.target.id;
+            if (src === curr) {
+                const newLevel = currLevel + 1;
+                if (levels[tgt] === undefined || levels[tgt] < newLevel) {
+                    levels[tgt] = newLevel;
+                    queue.push(tgt);
+                }
+            }
+        });
+    }
+
+    // Assign unvisited nodes
+    graphData.nodes.forEach(n => {
+        if (levels[n.id] === undefined) levels[n.id] = 0;
+    });
+
+    const maxLevel = Math.max(...Object.values(levels), 0);
+    const levelSpacing = height / (maxLevel + 3);
+
+    // Group by level, sort within level by module for clarity
+    const byLevel = {};
+    graphData.nodes.forEach(n => {
+        const lvl = levels[n.id];
+        if (!byLevel[lvl]) byLevel[lvl] = [];
+        byLevel[lvl].push(n);
+    });
+
+    for (const [lvl, levelNodes] of Object.entries(byLevel)) {
+        levelNodes.sort((a, b) => a.module.localeCompare(b.module));
+        const y = (parseInt(lvl) + 1.5) * levelSpacing;
+        const spacing = width / (levelNodes.length + 1);
+        levelNodes.forEach((n, i) => {
+            n.x = (i + 1) * spacing;
+            n.y = y;
+            n.fx = n.x;
+            n.fy = n.y;
+        });
+    }
+}
+
+// Radial: modules arranged in a circle, files within each module in a smaller circle
+function applyRadialLayout(width, height) {
+    const modules = [...new Set(graphData.nodes.map(n => n.module))].sort();
+    const cx = width / 2;
+    const cy = height / 2;
+    const outerR = Math.min(width, height) * 0.38;
+
+    modules.forEach((mod, i) => {
+        const angle = (2 * Math.PI * i) / modules.length - Math.PI / 2;
+        const mcx = cx + outerR * Math.cos(angle);
+        const mcy = cy + outerR * Math.sin(angle);
+
+        const modNodes = graphData.nodes.filter(n => n.module === mod);
+        const innerR = Math.min(outerR * 0.22, Math.max(30, modNodes.length * 12));
+
+        modNodes.forEach((n, j) => {
+            if (modNodes.length === 1) {
+                n.x = mcx;
+                n.y = mcy;
+            } else {
+                const innerAngle = (2 * Math.PI * j) / modNodes.length - Math.PI / 2;
+                n.x = mcx + innerR * Math.cos(innerAngle);
+                n.y = mcy + innerR * Math.sin(innerAngle);
+            }
+            n.fx = n.x;
+            n.fy = n.y;
+        });
+    });
+}
+
+// Immediately update all visual positions (no simulation tick needed)
+function updatePositionsImmediate() {
+    if (!window._nodes || !window._links || !window._labels) return;
+    window._nodes.attr("cx", d => d.x).attr("cy", d => d.y);
+    window._labels.attr("x", d => d.x).attr("y", d => d.y);
+    window._links.attr("d", d => edgePath(d));
+
+    // Update hulls
+    if (window._g) {
+        const modules = [...new Set(graphData.nodes.map(n => n.module))];
+        const hullGroup = window._g.select(".hulls");
+        if (!hullGroup.empty()) {
+            const hullPadding = 30;
+            const hullData = [];
+            for (const mod of modules) {
+                const points = graphData.nodes
+                    .filter(n => n.module === mod && activeModules.has(n.module))
+                    .map(n => [n.x, n.y]);
+                if (points.length >= 3) {
+                    const hull = d3.polygonHull(points);
+                    if (hull) hullData.push({ module: mod, hull });
+                } else if (points.length > 0) {
+                    const pcx = d3.mean(points, p => p[0]);
+                    const pcy = d3.mean(points, p => p[1]);
+                    hullData.push({
+                        module: mod,
+                        hull: [
+                            [pcx - hullPadding, pcy - hullPadding],
+                            [pcx + hullPadding, pcy - hullPadding],
+                            [pcx + hullPadding, pcy + hullPadding],
+                            [pcx - hullPadding, pcy + hullPadding],
+                        ]
+                    });
+                }
+            }
+            const expandHull = (hull, padding) => {
+                const hcx = d3.mean(hull, p => p[0]);
+                const hcy = d3.mean(hull, p => p[1]);
+                return hull.map(([x, y]) => {
+                    const hdx = x - hcx;
+                    const hdy = y - hcy;
+                    const dist = Math.sqrt(hdx * hdx + hdy * hdy) || 1;
+                    return [x + (hdx / dist) * padding, y + (hdy / dist) * padding];
+                });
+            };
+            const hulls = hullGroup.selectAll("path").data(hullData, d => d.module);
+            hulls.enter()
+                .append("path")
+                .attr("class", "module-hull")
+                .attr("fill", d => graphData.colors[d.module] || "#8b949e")
+                .attr("fill-opacity", 0.04)
+                .attr("stroke", d => graphData.colors[d.module] || "#8b949e")
+                .attr("stroke-opacity", 0.15)
+                .attr("stroke-width", 1.5)
+                .attr("stroke-dasharray", "4,3")
+                .merge(hulls)
+                .attr("d", d => {
+                    const expanded = expandHull(d.hull, hullPadding);
+                    return "M" + expanded.map(p => p.join(",")).join("L") + "Z";
+                });
+            hulls.exit().remove();
+
+            // Update module labels
+            const modLabelGroup = window._g.select(".module-labels");
+            if (!modLabelGroup.empty()) {
+                modLabelGroup.selectAll("text")
+                    .attr("x", d => {
+                        const pts = graphData.nodes.filter(n => n.module === d);
+                        return pts.length ? d3.mean(pts, n => n.x) : 0;
+                    })
+                    .attr("y", d => {
+                        const pts = graphData.nodes.filter(n => n.module === d);
+                        return pts.length ? d3.min(pts, n => n.y) - 28 : 0;
+                    });
+            }
+        }
+    }
+}
+
+// Auto-fit zoom to content
+function autoFitZoom() {
+    if (!window._g || !window._svg || !window._zoom) return;
+    const container = document.getElementById("graph-container");
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+
+    setTimeout(() => {
+        const bounds = window._g.node().getBBox();
+        if (bounds.width > 0 && bounds.height > 0) {
+            const pad = 80;
+            const scale = Math.min(
+                width / (bounds.width + pad * 2),
+                height / (bounds.height + pad * 2),
+                1.5
+            );
+            const tx = width / 2 - (bounds.x + bounds.width / 2) * scale;
+            const ty = height / 2 - (bounds.y + bounds.height / 2) * scale;
+            window._svg.transition().duration(600).call(
+                window._zoom.transform,
+                d3.zoomIdentity.translate(tx, ty).scale(scale)
+            );
+        }
+    }, 100);
+}
+
+function buildLegend() {
+    const legend = document.getElementById("legend");
+    legend.innerHTML = "";
+    for (const [mod, color] of Object.entries(graphData.colors)) {
+        if (!graphData.stats.modules[mod]) continue;
+        const item = document.createElement("div");
+        item.className = "legend-item";
+        item.innerHTML = `<div class="legend-dot" style="background:${color}"></div>${mod}`;
+        legend.appendChild(item);
+    }
+}
+
+// Hover
+function onNodeHover(event, d) {
+    // Don't override if a node is already selected (sticky highlight)
+    if (selectedNode) return;
+    if (impactMode) return;
+
+    const connected = getConnected(d.id);
+
+    window._nodes
+        .classed("dimmed", n => !connected.has(n.id))
+        .classed("highlighted", n => n.id === d.id);
+    window._labels
+        .classed("dimmed", n => !connected.has(n.id))
+        .classed("highlighted", n => n.id === d.id);
+    window._links
+        .classed("dimmed", l => l.source.id !== d.id && l.target.id !== d.id)
+        .classed("highlighted", l => l.source.id === d.id || l.target.id === d.id)
+        .attr("marker-end", l =>
+            (l.source.id === d.id || l.target.id === d.id)
+                ? "url(#arrowhead-hl)" : "url(#arrowhead)");
+
+    // Tooltip
+    let html = `<h3>${escapeHtml(d.path)}</h3>`;
+    html += `<div class="meta">${d.lines} lines | ${d.module} | ${d.hash}</div>`;
+    html += `<div class="meta">Modified: ${new Date(d.modified).toLocaleString()}</div>`;
+
+    // Last commit info
+    if (d.git_history && d.git_history.length > 0) {
+        const last = d.git_history[0];
+        html += `<div class="meta">Last commit: ${escapeHtml(last.author)} — ${escapeHtml(last.message)}</div>`;
+    }
+
+    // Impact count
+    const impactCount = (graphData.impact?.[d.id] || []).length;
+    if (impactCount > 0) {
+        html += `<div class="meta" style="color:#ffa657;">Impact: ${impactCount} downstream files</div>`;
+    }
+
+    if (d.classes && d.classes.length > 0) {
+        html += `<div class="section-title">Classes</div><ul class="item-list">`;
+        for (const c of d.classes) {
+            html += `<li>${escapeHtml(c.name)} (${c.methods.length} methods)</li>`;
+        }
+        html += `</ul>`;
+    }
+    if (d.functions && d.functions.length > 0) {
+        html += `<div class="section-title">Functions</div><ul class="item-list">`;
+        for (const f of d.functions.slice(0, 6)) {
+            html += `<li>${f.async ? "async " : ""}${escapeHtml(f.name)}()</li>`;
+        }
+        if (d.functions.length > 6) {
+            html += `<li>... +${d.functions.length - 6} more</li>`;
+        }
+        html += `</ul>`;
+    }
+
+    tooltip.innerHTML = html;
+    tooltip.style.display = "block";
+
+    const rect = document.getElementById("graph-container").getBoundingClientRect();
+    let x = event.clientX - rect.left + 15;
+    let y = event.clientY - rect.top + 15;
+    if (x + 360 > rect.width) x = event.clientX - rect.left - 370;
+    if (y + 300 > rect.height) y = event.clientY - rect.top - 310;
+    tooltip.style.left = x + "px";
+    tooltip.style.top = y + "px";
+}
+
+function onNodeOut() {
+    // If a node is selected (clicked), keep its highlight persistent
+    if (selectedNode) return;
+    if (impactMode) return;
+
+    window._nodes.classed("dimmed", false).classed("highlighted", false);
+    window._labels.classed("dimmed", false).classed("highlighted", false);
+    window._links
+        .classed("dimmed", false)
+        .classed("highlighted", false)
+        .attr("marker-end", "url(#arrowhead)");
+    tooltip.style.display = "none";
+}
+
+// Get all nodes connected to a given node
+function getConnected(nodeId) {
+    const connected = new Set([nodeId]);
+    for (const edge of graphData.edges) {
+        const src = typeof edge.source === "string" ? edge.source : edge.source.id;
+        const tgt = typeof edge.target === "string" ? edge.target : edge.target.id;
+        if (src === nodeId) connected.add(tgt);
+        if (tgt === nodeId) connected.add(src);
+    }
+    return connected;
+}
+
+// Select node (detail panel)
+function selectNode(nodeId) {
+    selectedNode = nodeId;
+    const node = graphData.nodes.find(n => n.id === nodeId);
+    if (!node) return;
+
+    // Show impact in graph if impact mode on
+    if (impactMode) {
+        highlightImpact(nodeId);
+    } else {
+        // Normal highlight
+        const connected = getConnected(nodeId);
+        window._nodes
+            .classed("dimmed", n => !connected.has(n.id))
+            .classed("highlighted", n => n.id === nodeId);
+        window._labels
+            .classed("dimmed", n => !connected.has(n.id))
+            .classed("highlighted", n => n.id === nodeId);
+        window._links
+            .classed("dimmed", l => l.source.id !== nodeId && l.target.id !== nodeId)
+            .classed("highlighted", l => l.source.id === nodeId || l.target.id === nodeId)
+            .attr("marker-end", l =>
+                (l.source.id === nodeId || l.target.id === nodeId)
+                    ? "url(#arrowhead-hl)" : "url(#arrowhead)");
+    }
+
+    tooltip.style.display = "none";
+
+    // Update impact panel
+    showImpactForNode(nodeId);
+
+    // Check role permissions
+    const roles = graphData.roles?.roles || {};
+    const role = roles[currentRole] || { can_see_git: true, can_see_impact: true };
+
+    // Build detail panel
+    const imports = graphData.edges
+        .filter(e => (typeof e.source === "string" ? e.source : e.source.id) === nodeId)
+        .map(e => typeof e.target === "string" ? e.target : e.target.id);
+    const importedBy = graphData.edges
+        .filter(e => (typeof e.target === "string" ? e.target : e.target.id) === nodeId)
+        .map(e => typeof e.source === "string" ? e.source : e.source.id);
+
+    let html = `<button id="detail-close" onclick="clearSelection()">&times;</button>`;
+    html += `<h2>${escapeHtml(node.path)}</h2>`;
+    html += `<div class="detail-meta">Module: <span>${node.module}</span></div>`;
+    html += `<div class="detail-meta">Lines: <span>${node.lines}</span></div>`;
+    html += `<div class="detail-meta">Hash: <span>${node.hash}</span></div>`;
+    html += `<div class="detail-meta">Modified: <span>${new Date(node.modified).toLocaleString()}</span></div>`;
+    html += `<div class="detail-meta">Size: <span>${(node.size_bytes / 1024).toFixed(1)} KB</span></div>`;
+
+    // Impact badge
+    if (role.can_see_impact) {
+        const impactCount = (graphData.impact?.[nodeId] || []).length;
+        let badgeClass = "low";
+        if (impactCount > 10) badgeClass = "high";
+        else if (impactCount > 3) badgeClass = "medium";
+        html += `<div class="detail-meta">Impact: <span class="impact-badge ${badgeClass}">${impactCount} files affected</span></div>`;
+    }
+
+    if (node.classes && node.classes.length > 0) {
+        html += `<div class="detail-section"><h3>Classes (${node.classes.length})</h3><ul>`;
+        for (const c of node.classes) {
+            const bases = c.bases && c.bases.length ? ` (${c.bases.join(", ")})` : "";
+            html += `<li class="class-item">${escapeHtml(c.name)}${escapeHtml(bases)} <span style="color:#8b949e;font-weight:normal">line ${c.line}</span></li>`;
+            for (const m of c.methods) {
+                const mName = typeof m === "object" ? m.name : m;
+                html += `<li class="method-item">.${escapeHtml(mName)}()</li>`;
+            }
+        }
+        html += `</ul></div>`;
+    }
+
+    if (node.functions && node.functions.length > 0) {
+        html += `<div class="detail-section"><h3>Functions (${node.functions.length})</h3><ul>`;
+        for (const f of node.functions) {
+            const sig = f.signature || f.name + "()";
+            html += `<li class="${f.async ? 'async-fn' : ''}" style="font-family:monospace;font-size:11px;">${escapeHtml(sig)} <span style="color:#484f58">line ${f.line}</span></li>`;
+        }
+        html += `</ul></div>`;
+    }
+
+    if (imports.length > 0) {
+        html += `<div class="detail-section"><h3>Imports (${imports.length})</h3><ul>`;
+        for (const imp of imports.sort()) {
+            html += `<li><span class="dep-link" onclick="selectNode('${imp}')">${escapeHtml(imp)}</span></li>`;
+        }
+        html += `</ul></div>`;
+    }
+
+    if (importedBy.length > 0) {
+        html += `<div class="detail-section"><h3>Imported By (${importedBy.length})</h3><ul>`;
+        for (const imp of importedBy.sort()) {
+            html += `<li><span class="dep-link" onclick="selectNode('${imp}')">${escapeHtml(imp)}</span></li>`;
+        }
+        html += `</ul></div>`;
+    }
+
+    // Git history
+    if (role.can_see_git && node.git_history && node.git_history.length > 0) {
+        html += `<div class="detail-section"><h3>Recent Changes (${node.git_history.length})</h3>`;
+        for (const commit of node.git_history) {
+            const dateStr = new Date(commit.date).toLocaleString();
+            html += `<div class="git-commit">
+                <div><span class="commit-author">${escapeHtml(commit.author)}</span> <span class="commit-sha">${commit.sha}</span></div>
+                <div class="commit-date">${dateStr}</div>
+                <div class="commit-msg">${escapeHtml(commit.message)}</div>
+            </div>`;
+        }
+        html += `</div>`;
+    }
+
+    // Code viewer button
+    if (node.source) {
+        html += `<button class="code-viewer-btn" onclick="openCodePanel('${escapeAttr(nodeId)}')">&#9654; View Source Code</button>`;
+    }
+
+    detailContent.innerHTML = html;
+    detailPanel.classList.add("open");
+
+    buildFileList();
+}
+
+function clearSelection() {
+    selectedNode = null;
+    impactMode = false;
+    document.querySelector('.ctrl-btn:nth-child(4)')?.classList.remove("active-btn");
+    detailPanel.classList.remove("open");
+    clearImpactHighlight();
+    window._nodes.classed("dimmed", false).classed("highlighted", false);
+    window._labels.classed("dimmed", false).classed("highlighted", false);
+    window._links
+        .classed("dimmed", false)
+        .classed("highlighted", false)
+        .attr("marker-end", "url(#arrowhead)");
+    buildFileList();
+}
+
+// Visibility based on module filters
+function updateVisibility() {
+    window._nodes.style("display", d => activeModules.has(d.module) ? null : "none");
+    window._labels.style("display", d => activeModules.has(d.module) ? null : "none");
+    window._links.style("display", d => {
+        const src = typeof d.source === "string" ? d.source : d.source.id;
+        const tgt = typeof d.target === "string" ? d.target : d.target.id;
+        const srcNode = graphData.nodes.find(n => n.id === src);
+        const tgtNode = graphData.nodes.find(n => n.id === tgt);
+        return (srcNode && activeModules.has(srcNode.module) &&
+                tgtNode && activeModules.has(tgtNode.module)) ? null : "none";
+    });
+}
+
+// Controls
+function resetZoom() {
+    window._svg.transition().duration(500).call(
+        window._zoom.transform, d3.zoomIdentity);
+}
+
+function toggleLabels() {
+    showLabels = !showLabels;
+    window._labels.style("display", showLabels ? null : "none");
+}
+
+function togglePhysics() {
+    physicsRunning = !physicsRunning;
+    if (physicsRunning) {
+        simulation.alpha(0.3).restart();
+    } else {
+        simulation.stop();
+    }
+}
+
+// Drag handlers
+function dragStart(event, d) {
+    if (!event.active && physicsRunning) simulation.alphaTarget(0.3).restart();
+    d.fx = d.x;
+    d.fy = d.y;
+}
+
+function dragging(event, d) {
+    d.fx = event.x;
+    d.fy = event.y;
+}
+
+function dragEnd(event, d) {
+    if (!event.active && physicsRunning) simulation.alphaTarget(0);
+    d.fx = null;
+    d.fy = null;
+}
+
+// Search
+document.getElementById("search-input").addEventListener("input", () => {
+    buildFileList();
+    const term = document.getElementById("search-input").value.toLowerCase();
+    if (term.length > 0) {
+        window._nodes.classed("dimmed", d => {
+            const haystack = (d.path + " " +
+                (d.classes || []).map(c => c.name).join(" ") + " " +
+                (d.functions || []).map(f => f.name).join(" ")).toLowerCase();
+            return !haystack.includes(term);
+        });
+        window._labels.classed("dimmed", d => {
+            const haystack = (d.path + " " +
+                (d.classes || []).map(c => c.name).join(" ") + " " +
+                (d.functions || []).map(f => f.name).join(" ")).toLowerCase();
+            return !haystack.includes(term);
+        });
+    } else {
+        window._nodes.classed("dimmed", false);
+        window._labels.classed("dimmed", false);
+    }
+});
+
+// Resize
+window.addEventListener("resize", () => {
+    if (simulation) {
+        const container = document.getElementById("graph-container");
+        simulation.force("center", d3.forceCenter(container.clientWidth / 2, container.clientHeight / 2));
+        simulation.alpha(0.1).restart();
+    }
+});
+
+// Init
+initApp();
+
+// --- Code Viewer Panel ---
+let codeViewerNodeId = null;
+let codeViewerTab = "source";
+
+function escapeAttr(s) {
+    return s.replace(/'/g, "\\'").replace(/"/g, "&quot;");
+}
+
+function highlightPython(code) {
+    const lines = code.split("\n");
+    const keywords = new Set([
+        "False","None","True","and","as","assert","async","await","break","class",
+        "continue","def","del","elif","else","except","finally","for","from","global",
+        "if","import","in","is","lambda","nonlocal","not","or","pass","raise","return",
+        "try","while","with","yield"
+    ]);
+    const builtins = new Set([
+        "print","len","range","int","str","float","list","dict","set","tuple","bool",
+        "type","isinstance","hasattr","getattr","setattr","super","property","classmethod",
+        "staticmethod","abstractmethod","enumerate","zip","map","filter","sorted","any","all",
+        "open","Exception","ValueError","TypeError","KeyError","RuntimeError","NotImplementedError"
+    ]);
+
+    return lines.map((line, i) => {
+        const num = `<span class="line-num">${i + 1}</span>`;
+        let hl = escapeHtml(line);
+
+        // Comments (must be first to avoid re-highlighting inside comments)
+        hl = hl.replace(/(#.*)$/, '<span class="hl-comment">$1</span>');
+
+        // Triple-quoted strings
+        hl = hl.replace(/(&#x27;&#x27;&#x27;|&quot;&quot;&quot;)(.*?)\1/g,
+            '<span class="hl-string">$1$2$1</span>');
+
+        // Strings (single and double)
+        hl = hl.replace(/(f?)(&#x27;(?:[^&#]|&#\w+;)*?&#x27;|&quot;(?:[^&]|&#\w+;)*?&quot;)/g,
+            '<span class="hl-string">$1$2</span>');
+
+        // Decorators
+        hl = hl.replace(/^(\s*)(@\w[\w.]*)/, '$1<span class="hl-decorator">$2</span>');
+
+        // Numbers
+        hl = hl.replace(/\b(\d+\.?\d*)\b/g, '<span class="hl-number">$1</span>');
+
+        // Keywords and builtins (word boundary)
+        hl = hl.replace(/\b(\w+)\b/g, (match, word) => {
+            if (keywords.has(word)) return `<span class="hl-keyword">${word}</span>`;
+            if (builtins.has(word)) return `<span class="hl-builtin">${word}</span>`;
+            if (word === "self" || word === "cls") return `<span class="hl-self">${word}</span>`;
+            return word;
+        });
+
+        // class/def names (after keyword highlighting)
+        hl = hl.replace(
+            /(<span class="hl-keyword">class<\/span>\s+)(\w+)/,
+            '$1<span class="hl-class">$2</span>'
+        );
+        hl = hl.replace(
+            /(<span class="hl-keyword">def<\/span>\s+)(\w+)/,
+            '$1<span class="hl-func">$2</span>'
+        );
+
+        return num + hl;
+    }).join("\n");
+}
+
+function openCodePanel(nodeId) {
+    const node = graphData.nodes.find(n => n.id === nodeId);
+    if (!node) return;
+    codeViewerNodeId = nodeId;
+    codeViewerTab = "source";
+
+    document.getElementById("code-file-path").textContent = node.path;
+    document.getElementById("code-file-meta").textContent =
+        `${node.lines} lines | ${(node.size_bytes / 1024).toFixed(1)} KB | ${node.module}`;
+
+    // Reset tab active state
+    document.querySelectorAll(".code-tab").forEach(t => t.classList.remove("active"));
+    document.querySelector(".code-tab").classList.add("active");
+
+    renderCodeTab("source");
+    document.getElementById("code-panel").classList.add("open");
+}
+
+function closeCodePanel() {
+    document.getElementById("code-panel").classList.remove("open");
+    codeViewerNodeId = null;
+}
+
+function showCodeTab(tab) {
+    codeViewerTab = tab;
+    document.querySelectorAll(".code-tab").forEach(t => t.classList.remove("active"));
+    event.target.classList.add("active");
+    renderCodeTab(tab);
+}
+
+function renderCodeTab(tab) {
+    const container = document.getElementById("code-content");
+    const node = graphData.nodes.find(n => n.id === codeViewerNodeId);
+    if (!node) return;
+
+    if (tab === "source") {
+        const highlighted = highlightPython(node.source || "// No source available");
+        container.innerHTML = `<pre>${highlighted}</pre>`;
+    } else if (tab === "summary") {
+        let html = '<div class="summary-view">';
+
+        // Classes
+        if (node.classes && node.classes.length > 0) {
+            html += `<h3>Classes (${node.classes.length})</h3>`;
+            for (const cls of node.classes) {
+                html += `<div class="summary-card">`;
+                html += `<div class="sig">${escapeHtml(cls.name)}</div>`;
+                if (cls.bases && cls.bases.length > 0) {
+                    html += `<div class="bases">extends ${cls.bases.map(b => escapeHtml(b)).join(", ")}</div>`;
+                }
+                if (cls.docstring) {
+                    html += `<div class="doc">${escapeHtml(cls.docstring)}</div>`;
+                }
+                if (cls.methods && cls.methods.length > 0) {
+                    html += `<ul style="margin:6px 0 0;padding-left:14px;">`;
+                    for (const m of cls.methods) {
+                        const sig = typeof m === "object" ? m.signature : m;
+                        html += `<li style="font-family:monospace;font-size:11px;color:#c9d1d9;margin:2px 0;">${escapeHtml(sig)}</li>`;
+                    }
+                    html += `</ul>`;
+                }
+                html += `</div>`;
+            }
+        }
+
+        // Functions
+        if (node.functions && node.functions.length > 0) {
+            html += `<h3>Functions (${node.functions.length})</h3>`;
+            for (const fn of node.functions) {
+                html += `<div class="summary-card">`;
+                const sig = fn.signature || fn.name;
+                html += `<div class="sig">${escapeHtml(sig)}</div>`;
+                if (fn.docstring) {
+                    html += `<div class="doc">${escapeHtml(fn.docstring)}</div>`;
+                }
+                html += `</div>`;
+            }
+        }
+
+        if (!node.classes?.length && !node.functions?.length) {
+            html += `<p style="color:#8b949e;">No classes or functions found.</p>`;
+        }
+        html += `</div>`;
+        container.innerHTML = html;
+    } else if (tab === "deps") {
+        const imports = graphData.edges
+            .filter(e => (typeof e.source === "string" ? e.source : e.source.id) === codeViewerNodeId)
+            .map(e => typeof e.target === "string" ? e.target : e.target.id);
+        const importedBy = graphData.edges
+            .filter(e => (typeof e.target === "string" ? e.target : e.target.id) === codeViewerNodeId)
+            .map(e => typeof e.source === "string" ? e.source : e.source.id);
+        const impacted = graphData.impact?.[codeViewerNodeId] || [];
+
+        let html = '<div class="summary-view">';
+
+        html += `<h3>Imports (${imports.length})</h3>`;
+        if (imports.length > 0) {
+            for (const dep of imports.sort()) {
+                html += `<div class="summary-card" style="cursor:pointer" onclick="openCodePanel('${escapeAttr(dep)}')">`;
+                html += `<div class="sig">${escapeHtml(dep)}</div>`;
+                html += `</div>`;
+            }
+        } else {
+            html += `<p style="color:#8b949e;">No project imports.</p>`;
+        }
+
+        html += `<h3>Imported By (${importedBy.length})</h3>`;
+        if (importedBy.length > 0) {
+            for (const dep of importedBy.sort()) {
+                html += `<div class="summary-card" style="cursor:pointer" onclick="openCodePanel('${escapeAttr(dep)}')">`;
+                html += `<div class="sig">${escapeHtml(dep)}</div>`;
+                html += `</div>`;
+            }
+        } else {
+            html += `<p style="color:#8b949e;">No dependents.</p>`;
+        }
+
+        html += `<h3>Impact Analysis (${impacted.length} files affected)</h3>`;
+        if (impacted.length > 0) {
+            for (const dep of impacted.sort()) {
+                html += `<div class="summary-card" style="cursor:pointer" onclick="openCodePanel('${escapeAttr(dep)}')">`;
+                html += `<div class="sig">${escapeHtml(dep)}</div>`;
+                html += `</div>`;
+            }
+        } else {
+            html += `<p style="color:#8b949e;">No downstream impact.</p>`;
+        }
+
+        html += `</div>`;
+        container.innerHTML = html;
+    }
+}
+</script>
+</body>
+</html>
