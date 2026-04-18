@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "codegraph-viz"
-version = "0.1.0"
+version = "0.1.1"
 description = "Visualize any Python codebase as an interactive dependency graph. One command. Zero config."
 readme = "README.md"
 license = "MIT"
@@ -42,9 +42,6 @@ codegraph = "codegraph.cli:main"
 Homepage = "https://github.com/deeppatel1842/codegraph-viz"
 Repository = "https://github.com/deeppatel1842/codegraph-viz"
 Issues = "https://github.com/deeppatel1842/codegraph-viz/issues"
-
-[tool.hatch.build.targets.sdist]
-include = ["codegraph/"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["codegraph"]
